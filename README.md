@@ -82,6 +82,7 @@ gcloud run deploy api-key-guardian \
   --set-env-vars \
     PROJECT_ID=YOUR_PROJECT_ID,\
     API_KEY_ID=YOUR_KEY_ID,\
+    PROXY_API_KEY=YOUR_PROXY_SECRET_KEY,\
     BLOCK_BUDGET_USD=1.0,\
     BLOCK_BUDGET_TOKENS=10000000,\
     GEMINI_MODEL=gemini-2.0-flash \
@@ -104,8 +105,10 @@ import httpx
 
 GUARDIAN_URL = "https://YOUR-GUARDIAN-URL.run.app"
 
+# Send the proxy API key in the X-API-Key header
 response = httpx.post(
     f"{GUARDIAN_URL}/generate",
+    headers={"X-API-Key": "YOUR_PROXY_SECRET_KEY"},
     json={
         "contents": [{"parts": [{"text": "Write a haiku about security."}]}]
     }
@@ -122,6 +125,7 @@ print(response.json())
 | `GEMINI_API_KEY` | ✅ | — | Real Gemini API key (inject via `--set-secrets`). |
 | `PROJECT_ID` | ✅ | — | GCP project ID where the key resides. |
 | `API_KEY_ID` | ✅ | — | GCP API key resource ID (UUID string) to delete. |
+| `PROXY_API_KEY` | ❌ | — | If provided, secures `/generate` behind an `X-API-Key` header check. |
 | `BLOCK_BUDGET_USD` | ❌ | `1.0` | Daily USD spend limit. |
 | `BLOCK_BUDGET_TOKENS` | ❌ | `10000000` | Daily token safety cap limit. |
 | `GEMINI_MODEL` | ❌ | `gemini-2.0-flash` | Downstream Gemini model. |
