@@ -22,6 +22,7 @@ ENV VARS:
 import os
 import logging
 import threading
+import time
 from datetime import datetime, timezone
 from flask import Flask, request, jsonify, abort
 import httpx
@@ -47,6 +48,7 @@ COST_PER_INPUT_TOKEN  = COST_PER_1M_INPUT / 1000000.0
 COST_PER_OUTPUT_TOKEN = COST_PER_1M_OUTPUT / 1000000.0
 
 GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+PROXY_API_KEY = os.environ.get("PROXY_API_KEY", "")
 STATUS_TOKEN = os.environ.get("STATUS_TOKEN", "")
 
 # ──────────────────────────────────────────────
@@ -63,24 +65,30 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger("guardian")
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024  # 1MB limit to prevent memory exhaustion
 
 # ──────────────────────────────────────────────
 # Core safety-net logic
 # ──────────────────────────────────────────────
 
 def revoke_api_key():
-    """Permanently delete the API key via GCP API Keys API."""
+    """Permanently delete the API key via GCP API Keys API with retries and exponential backoff."""
     if not PROJECT_ID or not KEY_ID:
         log.error("Cannot revoke key — PROJECT_ID or API_KEY_ID not set")
         return
-    try:
-        client = api_keys_v2.ApiKeysClient()
-        name   = f"projects/{PROJECT_ID}/locations/global/keys/{KEY_ID}"
-        log.critical(f"🔥 Deleting compromised API key: {name}")
-        client.delete_key(name=name)
-        log.critical(f"✅ API key {KEY_ID} permanently deleted.")
-    except Exception as e:
-        log.error(f"❌ Key deletion failed: {e}")
+    name = f"projects/{PROJECT_ID}/locations/global/keys/{KEY_ID}"
+    log.critical(f"🔥 Deleting compromised API key: {name}")
+    for attempt in range(3):
+        try:
+            client = api_keys_v2.ApiKeysClient()
+            client.delete_key(name=name)
+            log.critical(f"✅ API key {KEY_ID} permanently deleted.")
+            return
+        except Exception as e:
+            log.error(f"❌ Key deletion attempt {attempt+1}/3 failed: {e}")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    log.critical("🚨 ALL DELETION ATTEMPTS FAILED — manual intervention required!")
 
 
 def track_usage_and_check(usage_metadata: dict) -> bool:
@@ -140,6 +148,11 @@ def track_usage_and_check(usage_metadata: dict) -> bool:
 
 @app.route("/generate", methods=["POST"])
 def proxy():
+    if PROXY_API_KEY:
+        caller_key = request.headers.get("X-API-Key", "")
+        if caller_key != PROXY_API_KEY:
+            abort(401, description="Unauthorized.")
+
     if key_revoked:
         return jsonify({"error": "Service suspended: API key safety budget exceeded."}), 402
 
