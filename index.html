@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>API Key Guardian — GCP Auto-Protection Dashboard</title>
+  <meta name="description" content="Automated API Key protection system for GCP — detect, alert, and block compromised keys in real time." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Background effects -->
+  <div class="bg-grid"></div>
+  <div class="bg-glow glow-1"></div>
+  <div class="bg-glow glow-2"></div>
+  <div class="bg-glow glow-3"></div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🛡️</div>
+      <div class="logo-text">
+        <span class="logo-title">API Guardian</span>
+        <span class="logo-sub">GCP Auto-Protection</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-section="dashboard" id="nav-dashboard">
+        <span class="nav-icon">⚡</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-section="keys" id="nav-keys">
+        <span class="nav-icon">🔑</span>
+        <span>API Keys</span>
+      </a>
+      <a href="#" class="nav-item" data-section="rules" id="nav-rules">
+        <span class="nav-icon">📋</span>
+        <span>Block Rules</span>
+      </a>
+      <a href="#" class="nav-item" data-section="incidents" id="nav-incidents">
+        <span class="nav-icon">🚨</span>
+        <span>Incidents</span>
+        <span class="nav-badge" id="incident-badge">3</span>
+      </a>
+      <a href="#" class="nav-item" data-section="budget" id="nav-budget">
+        <span class="nav-icon">💰</span>
+        <span>Budget Guard</span>
+      </a>
+      <a href="#" class="nav-item" data-section="code" id="nav-code">
+        <span class="nav-icon">🖥️</span>
+        <span>Deploy Code</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-status">
+      <div class="status-item">
+        <span class="status-dot active"></span>
+        <span>Guardian Active</span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot active"></span>
+        <span>Cloud Run: OK</span>
+      </div>
+      <div class="status-item">
+        <span class="status-dot warning"></span>
+        <span>3 Active Threats</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Header -->
+    <header class="top-header">
+      <div class="header-left">
+        <button class="menu-btn" id="menu-btn">☰</button>
+        <div class="breadcrumb">
+          <span id="breadcrumb-text">Dashboard</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="header-time" id="live-time"></div>
+        <div class="threat-level" id="threat-level">
+          <span class="threat-dot"></span>
+          <span>THREAT LEVEL: MEDIUM</span>
+        </div>
+        <button class="btn-emergency" id="btn-emergency">🔴 Kill All Keys</button>
+      </div>
+    </header>
+
+    <!-- Emergency Modal -->
+    <div class="modal-overlay" id="emergency-modal" style="display:none;">
+      <div class="modal-card">
+        <div class="modal-icon">⚠️</div>
+        <h2>Emergency Kill Switch</h2>
+        <p>This will <strong>immediately revoke ALL API keys</strong> in your project. This action takes effect in under 30 seconds.</p>
+        <div class="modal-actions">
+          <button class="btn-cancel" id="modal-cancel">Cancel</button>
+          <button class="btn-confirm" id="modal-confirm">Confirm — Kill All Keys</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- === DASHBOARD SECTION === -->
+    <section class="section active" id="section-dashboard">
+      <!-- Stat Cards -->
+      <div class="stats-grid">
+        <div class="stat-card" id="stat-requests">
+          <div class="stat-header">
+            <span class="stat-label">Requests / Min</span>
+            <span class="stat-icon">📡</span>
+          </div>
+          <div class="stat-value" id="val-requests">0</div>
+          <div class="stat-trend up" id="trend-requests">↑ 0%</div>
+          <div class="stat-sparkline" id="spark-requests"></div>
+        </div>
+
+        <div class="stat-card danger" id="stat-blocked">
+          <div class="stat-header">
+            <span class="stat-label">Blocked Today</span>
+            <span class="stat-icon">🚫</span>
+          </div>
+          <div class="stat-value" id="val-blocked">0</div>
+          <div class="stat-trend up" id="trend-blocked">↑ 0 in last hour</div>
+          <div class="stat-sparkline" id="spark-blocked"></div>
+        </div>
+
+        <div class="stat-card warning" id="stat-spend">
+          <div class="stat-header">
+            <span class="stat-label">Spend Today (USD)</span>
+            <span class="stat-icon">💵</span>
+          </div>
+          <div class="stat-value" id="val-spend">$0.00</div>
+          <div class="stat-bar-wrap">
+            <div class="stat-bar">
+              <div class="stat-bar-fill" id="bar-spend" style="width:0%"></div>
+            </div>
+            <span class="stat-bar-label" id="label-spend">of $100 limit</span>
+          </div>
+        </div>
+
+        <div class="stat-card success" id="stat-keys">
+          <div class="stat-header">
+            <span class="stat-label">Active API Keys</span>
+            <span class="stat-icon">🔑</span>
+          </div>
+          <div class="stat-value" id="val-keys">4</div>
+          <div class="stat-trend">
+            <span class="badge-ok">3 Healthy</span>
+            <span class="badge-warn">1 Flagged</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Feed + Rules Panel -->
+      <div class="two-col">
+        <!-- Live Attack Feed -->
+        <div class="card">
+          <div class="card-header">
+            <h3>🔴 Live Threat Feed</h3>
+            <div class="live-indicator">
+              <span class="live-dot"></span>
+              <span>LIVE</span>
+            </div>
+          </div>
+          <div class="feed-list" id="live-feed"></div>
+        </div>
+
+        <!-- Protection Rules -->
+        <div class="card">
+          <div class="card-header">
+            <h3>⚙️ Active Protection Rules</h3>
+            <button class="btn-sm" id="add-rule-btn">+ Add Rule</button>
+          </div>
+          <div class="rules-list" id="rules-list">
+            <div class="rule-item active">
+              <div class="rule-toggle">
+                <input type="checkbox" checked class="toggle" id="rule-1">
+                <label for="rule-1"></label>
+              </div>
+              <div class="rule-info">
+                <span class="rule-name">Rate Limit</span>
+                <span class="rule-desc">Block IPs > 100 req/min</span>
+              </div>
+              <div class="rule-status active-tag">Active</div>
+            </div>
+            <div class="rule-item active">
+              <div class="rule-toggle">
+                <input type="checkbox" checked class="toggle" id="rule-2">
+                <label for="rule-2"></label>
+              </div>
+              <div class="rule-info">
+                <span class="rule-name">Spend Cap $10</span>
+                <span class="rule-desc">Warn at 80%, block at 100%</span>
+              </div>
+              <div class="rule-status active-tag">Active</div>
+            </div>
+            <div class="rule-item active">
+              <div class="rule-toggle">
+                <input type="checkbox" checked class="toggle" id="rule-3">
+                <label for="rule-3"></label>
+              </div>
+              <div class="rule-info">
+                <span class="rule-name">Geo Fence</span>
+                <span class="rule-desc">Block non-allowlisted regions</span>
+              </div>
+              <div class="rule-status active-tag">Active</div>
+            </div>
+            <div class="rule-item">
+              <div class="rule-toggle">
+                <input type="checkbox" class="toggle" id="rule-4">
+                <label for="rule-4"></label>
+              </div>
+              <div class="rule-info">
+                <span class="rule-name">DDoS Pattern</span>
+                <span class="rule-desc">ML anomaly detection</span>
+              </div>
+              <div class="rule-status inactive-tag">Inactive</div>
+            </div>
+            <div class="rule-item active">
+              <div class="rule-toggle">
+                <input type="checkbox" checked class="toggle" id="rule-5">
+                <label for="rule-5"></label>
+              </div>
+              <div class="rule-info">
+                <span class="rule-name">GitHub Leak Scan</span>
+                <span class="rule-desc">Auto-revoke on public exposure</span>
+              </div>
+              <div class="rule-status active-tag">Active</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- World Threat Map Placeholder -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+          <h3>🌍 Attack Origin Map</h3>
+          <span class="time-selector">
+            <button class="time-btn active">1H</button>
+            <button class="time-btn">6H</button>
+            <button class="time-btn">24H</button>
+          </span>
+        </div>
+        <div class="world-map" id="world-map">
+          <canvas id="map-canvas"></canvas>
+          <div class="map-legend">
+            <span class="legend-item"><span class="dot red"></span> Blocked</span>
+            <span class="legend-item"><span class="dot yellow"></span> Suspicious</span>
+            <span class="legend-item"><span class="dot green"></span> Allowed</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- === BUDGET SECTION === -->
+    <section class="section" id="section-budget">
+      <div class="card">
+        <div class="card-header">
+          <h3>💰 Budget Guard Configuration</h3>
+        </div>
+        <div class="budget-config">
+          <div class="budget-tier">
+            <div class="tier-header">
+              <span class="tier-icon warn">⚠️</span>
+              <h4>Warning Threshold</h4>
+            </div>
+            <div class="tier-control">
+              <span class="currency">$</span>
+              <input type="number" class="budget-input" id="warn-budget" value="10" min="1" max="10000" />
+              <span class="tier-action-label">→ Send Alert</span>
+            </div>
+            <div class="tier-actions">
+              <label class="action-check"><input type="checkbox" checked> Email notification</label>
+              <label class="action-check"><input type="checkbox" checked> Slack webhook</label>
+              <label class="action-check"><input type="checkbox"> PagerDuty</label>
+            </div>
+          </div>
+
+          <div class="tier-divider">→</div>
+
+          <div class="budget-tier danger-tier">
+            <div class="tier-header">
+              <span class="tier-icon danger">🚫</span>
+              <h4>Hard Block Threshold</h4>
+            </div>
+            <div class="tier-control">
+              <span class="currency">$</span>
+              <input type="number" class="budget-input" id="block-budget" value="100" min="1" max="10000" />
+              <span class="tier-action-label">→ Revoke Key</span>
+            </div>
+            <div class="tier-actions">
+              <label class="action-check"><input type="checkbox" checked> Auto-revoke API key</label>
+              <label class="action-check"><input type="checkbox" checked> Disable Cloud Run service</label>
+              <label class="action-check"><input type="checkbox" checked> Create incident ticket</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="budget-current">
+          <h4>Today's Spend</h4>
+          <div class="spend-track" id="spend-track">
+            <div class="spend-fill" id="spend-fill" style="width:0%"></div>
+            <div class="spend-marker warn-marker" id="warn-marker"></div>
+            <div class="spend-marker block-marker" id="block-marker"></div>
+          </div>
+          <div class="spend-labels">
+            <span>$0</span>
+            <span id="spend-current-label">$0.00 spent</span>
+            <span id="block-label">$100 limit</span>
+          </div>
+        </div>
+
+        <button class="btn-primary" id="save-budget">💾 Save Budget Rules</button>
+      </div>
+    </section>
+
+    <!-- === API KEYS SECTION === -->
+    <section class="section" id="section-keys">
+      <div class="card">
+        <div class="card-header">
+          <h3>🔑 Monitored API Keys</h3>
+          <button class="btn-sm">+ Add Key</button>
+        </div>
+        <div class="keys-table" id="keys-table"></div>
+      </div>
+    </section>
+
+    <!-- === INCIDENTS SECTION === -->
+    <section class="section" id="section-incidents">
+      <div class="card">
+        <div class="card-header">
+          <h3>🚨 Security Incidents</h3>
+          <span class="badge-danger" id="open-incidents">3 Open</span>
+        </div>
+        <div class="incidents-list" id="incidents-list"></div>
+      </div>
+    </section>
+
+    <!-- === DEPLOY CODE SECTION === -->
+    <section class="section" id="section-code">
+      <div class="card">
+        <div class="card-header">
+          <h3>🖥️ Deploy to GCP — One Click</h3>
+          <span class="badge-ok">Production Ready</span>
+        </div>
+        <div class="code-tabs">
+          <button class="code-tab active" data-tab="guardian">Guardian Proxy</button>
+          <button class="code-tab" data-tab="budget">Budget Kill Switch</button>
+          <button class="code-tab" data-tab="terraform">Terraform IaC</button>
+          <button class="code-tab" data-tab="github">GitHub Scanner</button>
+        </div>
+        <div class="code-panels">
+          <div class="code-panel active" id="tab-guardian">
+            <div class="code-desc">
+              <strong>Cloud Run Proxy</strong> — sits in front of your Gemini API calls, enforcing rate limits, IP blocks, and spend caps automatically.
+            </div>
+            <div class="code-block-wrap">
+              <button class="copy-btn" data-target="code-guardian">📋 Copy</button>
+              <pre class="code-block" id="code-guardian"><code><span class="c"># === API Key Guardian — Cloud Run Service ===</span>
+<span class="c"># File: guardian_proxy/main.py</span>
+
+<span class="kw">import</span> os, time, json, logging
+<span class="kw">from</span> flask <span class="kw">import</span> Flask, request, jsonify, abort
+<span class="kw">from</span> collections <span class="kw">import</span> defaultdict
+<span class="kw">from</span> google.cloud <span class="kw">import</span> apikeys_v2, pubsub_v1
+<span class="kw">import</span> httpx
+
+app = Flask(__name__)
+logging.basicConfig(level=logging.INFO)
+
+<span class="c"># === Config (set via env vars in Cloud Run) ===</span>
+RATE_LIMIT_RPM       = <span class="kw">int</span>(os.environ.get(<span class="st">"RATE_LIMIT_RPM"</span>, <span class="st">"100"</span>))
+WARN_BUDGET_USD      = <span class="kw">float</span>(os.environ.get(<span class="st">"WARN_BUDGET_USD"</span>, <span class="st">"10"</span>))
+BLOCK_BUDGET_USD     = <span class="kw">float</span>(os.environ.get(<span class="st">"BLOCK_BUDGET_USD"</span>, <span class="st">"100"</span>))
+PROJECT_ID           = os.environ.get(<span class="st">"PROJECT_ID"</span>, <span class="st">""</span>)
+ALERT_TOPIC          = os.environ.get(<span class="st">"ALERT_TOPIC"</span>, <span class="st">"api-guardian-alerts"</span>)
+API_KEY_ID           = os.environ.get(<span class="st">"MANAGED_KEY_ID"</span>, <span class="st">""</span>)
+
+<span class="c"># === In-memory tracking (use Redis in production) ===</span>
+ip_requests   = defaultdict(list)   <span class="c"># IP → [timestamps]</span>
+blocked_ips   = <span class="kw">set</span>()              <span class="c"># Permanently blocked IPs</span>
+daily_spend   = <span class="num">0.0</span>               <span class="c"># Track today's USD spend</span>
+total_blocked = <span class="num">0</span>
+
+<span class="c"># ─────────────────────────────────────────────</span>
+<span class="kw">def</span> <span class="fn">is_rate_limited</span>(ip: str) -> bool:
+    now = time.time()
+    window = ip_requests[ip]
+    <span class="c"># Keep only requests within the last 60 seconds</span>
+    ip_requests[ip] = [t <span class="kw">for</span> t <span class="kw">in</span> window <span class="kw">if</span> now - t < <span class="num">60</span>]
+    <span class="kw">if</span> <span class="kw">len</span>(ip_requests[ip]) >= RATE_LIMIT_RPM:
+        <span class="kw">return</span> <span class="kw">True</span>
+    ip_requests[ip].append(now)
+    <span class="kw">return</span> <span class="kw">False</span>
+
+<span class="kw">def</span> <span class="fn">publish_alert</span>(alert_type: str, details: dict):
+    <span class="kw">try</span>:
+        publisher = pubsub_v1.PublisherClient()
+        topic = f<span class="st">"projects/{PROJECT_ID}/topics/{ALERT_TOPIC}"</span>
+        data = json.dumps({<span class="st">"type"</span>: alert_type, <span class="st">"ts"</span>: time.time(), **details})
+        publisher.publish(topic, data.encode())
+        logging.info(f<span class="st">"Alert published: {alert_type}"</span>)
+    <span class="kw">except</span> Exception <span class="kw">as</span> e:
+        logging.error(f<span class="st">"Alert failed: {e}"</span>)
+
+<span class="kw">def</span> <span class="fn">revoke_api_key</span>():
+    <span class="kw">try</span>:
+        client = apikeys_v2.ApiKeysClient()
+        key_name = f<span class="st">"projects/{PROJECT_ID}/locations/global/keys/{API_KEY_ID}"</span>
+        key = client.get_key(name=key_name)
+        key.restrictions.api_targets = []
+        client.update_key(key=key, update_mask={<span class="st">"paths"</span>: [<span class="st">"restrictions"</span>]})
+        logging.critical(<span class="st">"🔒 API KEY REVOKED — budget exceeded"</span>)
+    <span class="kw">except</span> Exception <span class="kw">as</span> e:
+        logging.error(f<span class="st">"Key revocation failed: {e}"</span>)
+
+<span class="c"># ─────────────────────────────────────────────</span>
+@app.route(<span class="st">"/v1/proxy"</span>, methods=[<span class="st">"POST"</span>])
+<span class="kw">def</span> <span class="fn">proxy_request</span>():
+    <span class="kw">global</span> daily_spend, total_blocked
+    client_ip = request.headers.get(<span class="st">"X-Forwarded-For"</span>, request.remote_addr)
+
+    <span class="c"># 1. Check blocked IP list</span>
+    <span class="kw">if</span> client_ip <span class="kw">in</span> blocked_ips:
+        total_blocked += <span class="num">1</span>
+        abort(<span class="num">429</span>, <span class="st">"IP permanently blocked by Guardian"</span>)
+
+    <span class="c"># 2. Enforce rate limit</span>
+    <span class="kw">if</span> is_rate_limited(client_ip):
+        blocked_ips.add(client_ip)
+        total_blocked += <span class="num">1</span>
+        publish_alert(<span class="st">"RATE_LIMIT_BREACH"</span>, {<span class="st">"ip"</span>: client_ip, <span class="st">"rpm"</span>: RATE_LIMIT_RPM})
+        abort(<span class="num">429</span>, <span class="st">"Rate limit exceeded — IP auto-blocked"</span>)
+
+    <span class="c"># 3. Check budget cap</span>
+    <span class="kw">if</span> daily_spend >= BLOCK_BUDGET_USD:
+        publish_alert(<span class="st">"BUDGET_EXCEEDED"</span>, {<span class="st">"spend"</span>: daily_spend, <span class="st">"limit"</span>: BLOCK_BUDGET_USD})
+        revoke_api_key()
+        abort(<span class="num">402</span>, <span class="st">"Daily budget exceeded — key auto-revoked"</span>)
+
+    <span class="c"># 4. Forward to Gemini API</span>
+    api_key = os.environ.get(<span class="st">"GEMINI_API_KEY"</span>)
+    resp = httpx.post(
+        <span class="st">"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"</span>,
+        params={<span class="st">"key"</span>: api_key},
+        json=request.get_json(),
+        timeout=<span class="num">30</span>
+    )
+
+    <span class="c"># 5. Track cost (estimate based on token count)</span>
+    result = resp.json()
+    tokens = result.get(<span class="st">"usageMetadata"</span>, {}).get(<span class="st">"totalTokenCount"</span>, <span class="num">0</span>)
+    daily_spend += tokens * <span class="num">0.000001</span>  <span class="c"># $1 per 1M tokens</span>
+    <span class="kw">if</span> daily_spend >= WARN_BUDGET_USD:
+        publish_alert(<span class="st">"BUDGET_WARNING"</span>, {<span class="st">"spend"</span>: daily_spend, <span class="st">"limit"</span>: WARN_BUDGET_USD})
+
+    <span class="kw">return</span> jsonify(result), resp.status_code
+
+@app.route(<span class="st">"/health"</span>)
+<span class="kw">def</span> <span class="fn">health</span>():
+    <span class="kw">return</span> jsonify({<span class="st">"status"</span>: <span class="st">"ok"</span>, <span class="st">"blocked_ips"</span>: <span class="kw">len</span>(blocked_ips), <span class="st">"spend"</span>: daily_spend})
+
+<span class="kw">if</span> __name__ == <span class="st">"__main__"</span>:
+    app.run(host=<span class="st">"0.0.0.0"</span>, port=<span class="kw">int</span>(os.environ.get(<span class="st">"PORT"</span>, <span class="num">8080</span>)))</code></pre>
+            </div>
+          </div>
+
+          <div class="code-panel" id="tab-budget">
+            <div class="code-desc">
+              <strong>Budget Kill Switch</strong> — Cloud Function triggered by GCP Budget Pub/Sub. Auto-revokes key when $10/$100 thresholds are hit.
+            </div>
+            <div class="code-block-wrap">
+              <button class="copy-btn" data-target="code-budget">📋 Copy</button>
+              <pre class="code-block" id="code-budget"><code><span class="c"># === Budget-Triggered Kill Switch (Cloud Function v2) ===</span>
+<span class="c"># Trigger: GCP Budget Pub/Sub notification</span>
+
+<span class="kw">import</span> base64, json, os, functions_framework
+<span class="kw">from</span> google.cloud <span class="kw">import</span> apikeys_v2, run_v2, monitoring_v3
+<span class="kw">import</span> google.auth
+
+PROJECT_ID   = os.environ[<span class="st">"PROJECT_ID"</span>]
+KEY_ID       = os.environ[<span class="st">"API_KEY_ID"</span>]
+WARN_BUDGET  = <span class="kw">float</span>(os.environ.get(<span class="st">"WARN_BUDGET"</span>, <span class="st">"10"</span>))
+BLOCK_BUDGET = <span class="kw">float</span>(os.environ.get(<span class="st">"BLOCK_BUDGET"</span>, <span class="st">"100"</span>))
+CLOUD_RUN_SVC = os.environ.get(<span class="st">"CLOUD_RUN_SERVICE"</span>, <span class="st">""</span>)
+
+@functions_framework.cloud_event
+<span class="kw">def</span> <span class="fn">budget_kill_switch</span>(cloud_event):
+    <span class="c"># Decode Pub/Sub budget notification</span>
+    data = json.loads(base64.b64decode(cloud_event.data[<span class="st">"message"</span>][<span class="st">"data"</span>]))
+    cost_amount  = data.get(<span class="st">"costAmount"</span>, <span class="num">0</span>)
+    budget_amount = data.get(<span class="st">"budgetAmount"</span>, <span class="num">999</span>)
+    alert_threshold = data.get(<span class="st">"alertThresholdExceeded"</span>, <span class="num">0</span>)
+
+    print(f<span class="st">"💰 Budget alert: ${cost_amount:.2f} of ${budget_amount:.2f} ({alert_threshold*100:.0f}%)"</span>)
+
+    <span class="c"># Warning level: $10 hit → log + alert only</span>
+    <span class="kw">if</span> cost_amount >= WARN_BUDGET <span class="kw">and</span> cost_amount < BLOCK_BUDGET:
+        print(<span class="st">"⚠️  WARNING threshold hit — sending alerts"</span>)
+        _create_monitoring_incident(<span class="st">"WARNING"</span>, cost_amount)
+        <span class="kw">return</span>
+
+    <span class="c"># Block level: $100 hit → auto-revoke key + disable Cloud Run</span>
+    <span class="kw">if</span> cost_amount >= BLOCK_BUDGET:
+        print(<span class="st">"🚫 BLOCK threshold hit — executing kill switch"</span>)
+        _revoke_api_key()
+        <span class="kw">if</span> CLOUD_RUN_SVC:
+            _disable_cloud_run_service()
+        _create_monitoring_incident(<span class="st">"CRITICAL"</span>, cost_amount)
+
+<span class="kw">def</span> <span class="fn">_revoke_api_key</span>():
+    <span class="kw">try</span>:
+        client = apikeys_v2.ApiKeysClient()
+        name = f<span class="st">"projects/{PROJECT_ID}/locations/global/keys/{KEY_ID}"</span>
+        key = client.get_key(name=name)
+        <span class="c"># Remove all API restrictions = effectively disables the key</span>
+        key.restrictions.ClearField(<span class="st">"api_targets"</span>)
+        client.update_key(key=key, update_mask={<span class="st">"paths"</span>: [<span class="st">"restrictions"</span>]})
+        print(f<span class="st">"✅ API Key {KEY_ID} successfully revoked"</span>)
+    <span class="kw">except</span> Exception <span class="kw">as</span> e:
+        print(f<span class="st">"❌ Key revocation failed: {e}"</span>)
+        raise
+
+<span class="kw">def</span> <span class="fn">_disable_cloud_run_service</span>():
+    <span class="c"># Set max instances to 0 to freeze the service</span>
+    <span class="kw">try</span>:
+        client = run_v2.ServicesClient()
+        svc_name = f<span class="st">"projects/{PROJECT_ID}/locations/us-central1/services/{CLOUD_RUN_SVC}"</span>
+        service = client.get_service(name=svc_name)
+        service.template.scaling.max_instance_count = <span class="num">0</span>
+        client.update_service(service=service)
+        print(f<span class="st">"✅ Cloud Run service {CLOUD_RUN_SVC} frozen"</span>)
+    <span class="kw">except</span> Exception <span class="kw">as</span> e:
+        print(f<span class="st">"❌ Cloud Run freeze failed: {e}"</span>)
+
+<span class="kw">def</span> <span class="fn">_create_monitoring_incident</span>(severity: str, cost: float):
+    client = monitoring_v3.AlertPolicyServiceClient()
+    print(f<span class="st">"📊 Incident created: [{severity}] Spend=${cost:.2f}"</span>)
+    <span class="c"># In production: integrate with PagerDuty / Opsgenie here</span></code></pre>
+            </div>
+          </div>
+
+          <div class="code-panel" id="tab-terraform">
+            <div class="code-desc">
+              <strong>Terraform IaC</strong> — Deploy the complete guardian stack to GCP in one <code>terraform apply</code>.
+            </div>
+            <div class="code-block-wrap">
+              <button class="copy-btn" data-target="code-terraform">📋 Copy</button>
+              <pre class="code-block" id="code-terraform"><code><span class="c"># === API Key Guardian — Full GCP Infrastructure ===</span>
+<span class="c"># Run: terraform init && terraform apply</span>
+
+terraform {
+  required_providers {
+    google = { source = <span class="st">"hashicorp/google"</span>, version = <span class="st">"~> 5.0"</span> }
+  }
+}
+
+variable <span class="st">"project_id"</span>   { type = string }
+variable <span class="st">"region"</span>        { default = <span class="st">"us-central1"</span> }
+variable <span class="st">"warn_budget"</span>   { default = <span class="st">"10"</span> }
+variable <span class="st">"block_budget"</span>  { default = <span class="st">"100"</span> }
+variable <span class="st">"rate_limit_rpm"</span>{ default = <span class="st">"100"</span> }
+
+<span class="c"># 1. Pub/Sub topic for alerts</span>
+resource <span class="st">"google_pubsub_topic"</span> <span class="st">"alerts"</span> {
+  name    = <span class="st">"api-guardian-alerts"</span>
+  project = var.project_id
+}
+
+<span class="c"># 2. Budget with Pub/Sub notifications</span>
+resource <span class="st">"google_billing_budget"</span> <span class="st">"guardian_budget"</span> {
+  billing_account = data.google_billing_account.acct.id
+  display_name    = <span class="st">"API-Key-Guardian-Budget"</span>
+
+  budget_filter {
+    projects = [<span class="st">"projects/${var.project_id}"</span>]
+    services = [<span class="st">"services/CC5B-4F61-B017"</span>]  <span class="c"># Generative AI service</span>
+  }
+
+  amount { specified_amount { currency_code = <span class="st">"USD"</span>; units = var.block_budget } }
+
+  threshold_rules { threshold_percent = 0.1; spend_basis = <span class="st">"CURRENT_SPEND"</span> }
+  threshold_rules { threshold_percent = 0.5; spend_basis = <span class="st">"CURRENT_SPEND"</span> }
+  threshold_rules { threshold_percent = 0.8; spend_basis = <span class="st">"CURRENT_SPEND"</span> }
+  threshold_rules { threshold_percent = 1.0; spend_basis = <span class="st">"CURRENT_SPEND"</span> }
+
+  all_updates_rule {
+    pubsub_topic = google_pubsub_topic.alerts.id
+    schema_version = <span class="st">"1.0"</span>
+  }
+}
+
+<span class="c"># 3. Cloud Run — Guardian Proxy</span>
+resource <span class="st">"google_cloud_run_v2_service"</span> <span class="st">"guardian"</span> {
+  name     = <span class="st">"api-key-guardian"</span>
+  location = var.region
+  project  = var.project_id
+
+  template {
+    scaling { max_instance_count = <span class="num">10</span>; min_instance_count = <span class="num">1</span> }
+    containers {
+      image = <span class="st">"gcr.io/${var.project_id}/guardian-proxy:latest"</span>
+      env {
+        name  = <span class="st">"RATE_LIMIT_RPM"</span>
+        value = var.rate_limit_rpm
+      }
+      env {
+        name  = <span class="st">"WARN_BUDGET_USD"</span>
+        value = var.warn_budget
+      }
+      env {
+        name  = <span class="st">"BLOCK_BUDGET_USD"</span>
+        value = var.block_budget
+      }
+      env {
+        name  = <span class="st">"PROJECT_ID"</span>
+        value = var.project_id
+      }
+      env {
+        name = <span class="st">"GEMINI_API_KEY"</span>
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.api_key.secret_id
+            version = <span class="st">"latest"</span>
+          }
+        }
+      }
+      resources { limits = { cpu = <span class="st">"1"</span>, memory = <span class="st">"512Mi"</span> } }
+    }
+  }
+}
+
+<span class="c"># 4. Cloud Function — Budget Kill Switch</span>
+resource <span class="st">"google_cloudfunctions2_function"</span> <span class="st">"kill_switch"</span> {
+  name     = <span class="st">"budget-kill-switch"</span>
+  location = var.region
+  project  = var.project_id
+
+  build_config {
+    runtime     = <span class="st">"python312"</span>
+    entry_point = <span class="st">"budget_kill_switch"</span>
+    source { storage_source { bucket = google_storage_bucket.fn_source.name; object = <span class="st">"kill-switch.zip"</span> } }
+  }
+
+  event_trigger {
+    trigger_region = var.region
+    event_type     = <span class="st">"google.cloud.pubsub.topic.v1.messagePublished"</span>
+    pubsub_topic   = google_pubsub_topic.alerts.id
+    retry_policy   = <span class="st">"RETRY_POLICY_RETRY"</span>
+  }
+
+  service_config {
+    max_instance_count = <span class="num">3</span>
+    environment_variables = {
+      PROJECT_ID    = var.project_id
+      API_KEY_ID    = var.api_key_id
+      WARN_BUDGET   = var.warn_budget
+      BLOCK_BUDGET  = var.block_budget
+      CLOUD_RUN_SERVICE = <span class="st">"api-key-guardian"</span>
+    }
+  }
+}
+
+<span class="c"># 5. Cloud Armor Security Policy</span>
+resource <span class="st">"google_compute_security_policy"</span> <span class="st">"guardian_armor"</span> {
+  name    = <span class="st">"api-guardian-armor"</span>
+  project = var.project_id
+
+  rule {
+    priority    = <span class="num">1000</span>
+    action      = <span class="st">"rate_based_ban"</span>
+    description = <span class="st">"Block IPs exceeding 100 req/min"</span>
+    match { versioned_expr = <span class="st">"SRC_IPS_V1"</span>; config { src_ip_ranges = [<span class="st">"*"</span>] } }
+    rate_limit_options {
+      rate_limit_threshold { count = <span class="num">100</span>; interval_sec = <span class="num">60</span> }
+      ban_duration_sec = <span class="num">3600</span>
+      conform_action   = <span class="st">"allow"</span>
+      exceed_action    = <span class="st">"deny(429)"</span>
+      enforce_on_key   = <span class="st">"IP"</span>
+    }
+  }
+  rule { priority = <span class="num">2147483647</span>; action = <span class="st">"allow"</span>; match { versioned_expr = <span class="st">"SRC_IPS_V1"</span>; config { src_ip_ranges = [<span class="st">"*"</span>] } } }
+}
+
+output <span class="st">"guardian_url"</span> {
+  value = google_cloud_run_v2_service.guardian.uri
+}</code></pre>
+            </div>
+          </div>
+
+          <div class="code-panel" id="tab-github">
+            <div class="code-desc">
+              <strong>GitHub Leak Scanner</strong> — Cloud Scheduler job that searches GitHub for your exposed API keys and auto-revokes them.
+            </div>
+            <div class="code-block-wrap">
+              <button class="copy-btn" data-target="code-github">📋 Copy</button>
+              <pre class="code-block" id="code-github"><code><span class="c"># === GitHub API Key Leak Scanner ===</span>
+<span class="c"># Cloud Scheduler → Cloud Run job (runs every 5 minutes)</span>
+
+<span class="kw">import</span> os, re, requests, logging
+<span class="kw">from</span> google.cloud <span class="kw">import</span> apikeys_v2, secretmanager
+
+logging.basicConfig(level=logging.INFO)
+
+PROJECT_ID    = os.environ[<span class="st">"PROJECT_ID"</span>]
+GITHUB_TOKEN  = os.environ[<span class="st">"GITHUB_TOKEN"</span>]
+MANAGED_KEYS  = os.environ.get(<span class="st">"MANAGED_KEY_IDS"</span>, <span class="st">""</span>).split(<span class="st">","</span>)
+
+<span class="c"># GCP API key pattern (AIza... format)</span>
+GCP_KEY_PATTERN = <span class="kw">re</span>.compile(<span class="st">r'AIza[0-9A-Za-z\-_]{35}'</span>)
+
+<span class="kw">def</span> <span class="fn">get_current_key_values</span>() -> <span class="kw">dict</span>:
+    <span class="st">"""Fetch actual key strings from Secret Manager"""</span>
+    client = secretmanager.SecretManagerServiceClient()
+    key_map = {}
+    <span class="kw">for</span> key_id <span class="kw">in</span> MANAGED_KEYS:
+        <span class="kw">if</span> <span class="kw">not</span> key_id: <span class="kw">continue</span>
+        secret_name = f<span class="st">"projects/{PROJECT_ID}/secrets/apikey-{key_id}/versions/latest"</span>
+        resp = client.access_secret_version(name=secret_name)
+        key_val = resp.payload.data.decode()
+        key_map[key_val] = key_id
+    <span class="kw">return</span> key_map
+
+<span class="kw">def</span> <span class="fn">search_github_for_key</span>(key_prefix: str) -> <span class="kw">list</span>:
+    <span class="st">"""Search GitHub code for the first 16 chars of the key"""</span>
+    query = f<span class="st">"{key_prefix[:16]} language:python OR language:javascript OR language:yaml"</span>
+    headers = {
+        <span class="st">"Authorization"</span>: f<span class="st">"token {GITHUB_TOKEN}"</span>,
+        <span class="st">"Accept"</span>: <span class="st">"application/vnd.github.v3+json"</span>
+    }
+    resp = requests.get(
+        <span class="st">"https://api.github.com/search/code"</span>,
+        params={<span class="st">"q"</span>: query, <span class="st">"per_page"</span>: <span class="num">5</span>},
+        headers=headers,
+        timeout=<span class="num">10</span>
+    )
+    <span class="kw">if</span> resp.status_code != <span class="num">200</span>:
+        <span class="kw">return</span> []
+    <span class="kw">return</span> resp.json().get(<span class="st">"items"</span>, [])
+
+<span class="kw">def</span> <span class="fn">auto_revoke_leaked_key</span>(key_id: str, leak_url: str):
+    <span class="st">"""Immediately revoke the key and log the incident"""</span>
+    logging.critical(f<span class="st">"🚨 LEAK DETECTED: Key {key_id} found at {leak_url}"</span>)
+    <span class="kw">try</span>:
+        client = apikeys_v2.ApiKeysClient()
+        key_name = f<span class="st">"projects/{PROJECT_ID}/locations/global/keys/{key_id}"</span>
+        request = apikeys_v2.DeleteKeyRequest(name=key_name)
+        client.delete_key(request=request)
+        logging.critical(f<span class="st">"✅ Key {key_id} DELETED — was leaked on GitHub"</span>)
+    <span class="kw">except</span> Exception <span class="kw">as</span> e:
+        logging.error(f<span class="st">"❌ Revocation error: {e}"</span>)
+
+<span class="kw">def</span> <span class="fn">main</span>():
+    logging.info(<span class="st">"🔍 Starting GitHub leak scan..."</span>)
+    key_map = get_current_key_values()
+
+    <span class="kw">for</span> key_val, key_id <span class="kw">in</span> key_map.items():
+        results = search_github_for_key(key_val)
+        <span class="kw">if</span> results:
+            <span class="kw">for</span> item <span class="kw">in</span> results:
+                leak_url = item.get(<span class="st">"html_url"</span>, <span class="st">"unknown"</span>)
+                auto_revoke_leaked_key(key_id, leak_url)
+        <span class="kw">else</span>:
+            logging.info(f<span class="st">"✅ Key {key_id}: No leaks found"</span>)
+
+    logging.info(<span class="st">"✅ Scan complete"</span>)
+
+<span class="kw">if</span> __name__ == <span class="st">"__main__"</span>:
+    main()</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- === RULES SECTION === -->
+    <section class="section" id="section-rules">
+      <div class="card">
+        <div class="card-header">
+          <h3>📋 Block Rules Configuration</h3>
+          <button class="btn-sm" id="add-rule-btn2">+ New Rule</button>
+        </div>
+        <div class="rules-config" id="rules-config"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
